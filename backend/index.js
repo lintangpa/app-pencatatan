@@ -365,7 +365,7 @@ app.get('/api/transactions', authenticate, async (req, res) => {
 });
 
 app.post('/api/transactions', authenticate, async (req, res) => {
-    const { month_budget_id, category_budget_id, type, amount, transaction_date, note } = req.body;
+    const { month_budget_id, category_budget_id, type, amount, transaction_date, note, is_reimbursed } = req.body;
 
     if (!amount || amount <= 0 || !['income', 'expense'].includes(type)) {
         return res.status(400).json({ message: "Data tidak valid" });
@@ -373,9 +373,9 @@ app.post('/api/transactions', authenticate, async (req, res) => {
 
     try {
         await db.query(`
-            INSERT INTO transactions (user_id, month_budget_id, category_budget_id, type, amount, transaction_date, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [req.userId, month_budget_id, category_budget_id, type, amount, transaction_date, note]);
+            INSERT INTO transactions (user_id, month_budget_id, category_budget_id, type, amount, transaction_date, note, is_reimbursed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [req.userId, month_budget_id, category_budget_id, type, amount, transaction_date, note, is_reimbursed ? 1 : 0]);
         res.status(201).json({ message: "Transaksi berhasil dicatat" });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -384,7 +384,7 @@ app.post('/api/transactions', authenticate, async (req, res) => {
 
 app.put('/api/transactions/:id', authenticate, async (req, res) => {
     const { id } = req.params;
-    const { month_budget_id, category_budget_id, type, amount, transaction_date, note } = req.body;
+    const { month_budget_id, category_budget_id, type, amount, transaction_date, note, is_reimbursed } = req.body;
 
     if (!amount || amount <= 0 || !['income', 'expense'].includes(type)) {
         return res.status(400).json({ message: "Data tidak valid" });
@@ -393,9 +393,9 @@ app.put('/api/transactions/:id', authenticate, async (req, res) => {
     try {
         const [result] = await db.query(`
             UPDATE transactions 
-            SET month_budget_id = ?, category_budget_id = ?, type = ?, amount = ?, transaction_date = ?, note = ?
+            SET month_budget_id = ?, category_budget_id = ?, type = ?, amount = ?, transaction_date = ?, note = ?, is_reimbursed = ?
             WHERE id = ? AND user_id = ?
-        `, [month_budget_id, category_budget_id, type, amount, transaction_date, note, id, req.userId]);
+        `, [month_budget_id, category_budget_id, type, amount, transaction_date, note, is_reimbursed ? 1 : 0, id, req.userId]);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ message: "Transaksi tidak ditemukan atau bukan milik Anda" });

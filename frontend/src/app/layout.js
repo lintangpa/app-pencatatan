@@ -13,19 +13,23 @@ export const metadata = {
 
 import { Navbar } from "@/components/Navbar";
 import { Toaster } from "sonner";
+import { ThemeProvider } from "@/components/theme-provider";
 
 export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
       className={`${plusJakarta.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col font-sans">
-        <Navbar />
-        <main className="flex-1 pt-16">
-          {children}
-        </main>
-        <Toaster richColors position="top-center" />
+      <body className="min-h-full flex flex-col font-sans bg-background text-foreground">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <Navbar />
+          <main className="flex-1 pt-16">
+            {children}
+          </main>
+          <Toaster richColors position="top-center" />
+        </ThemeProvider>
       </body>
     </html>
   );

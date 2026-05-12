@@ -47,9 +47,6 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm border-primary/20 bg-card/50 backdrop-blur-sm">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">Masuk</CardTitle>
-          <CardDescription className="text-center">
-            Masukkan kredensial Anda untuk mengakses catatan
-          </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">

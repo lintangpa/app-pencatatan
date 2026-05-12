@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, Wallet, LayoutDashboard, Settings, History, Target, LogOut } from "lucide-react";
+import { Menu, Wallet, LayoutDashboard, Settings, History, Target, LogOut, Sun, Moon } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
@@ -16,6 +18,13 @@ const menuItems = [
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Jangan tampilkan navbar di halaman login & register
   if (pathname === "/login" || pathname === "/register") return null;
@@ -32,8 +41,24 @@ export function Navbar() {
           <Wallet className="text-primary w-6 h-6" />
           <span className="hidden sm:inline">HaloKalin</span>
         </Link>
+        
+        <div className="flex items-center gap-2">
+          {mounted && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full hover:bg-primary/20 transition-all"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            >
+              {theme === "dark" ? (
+                <Sun className="w-5 h-5 text-primary" />
+              ) : (
+                <Moon className="w-5 h-5 text-primary" />
+              )}
+            </Button>
+          )}
 
-        <Sheet>
+          <Sheet open={isOpen} onOpenChange={setIsOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="hover:bg-primary/20">
               <Menu className="w-6 h-6" />
@@ -54,6 +79,7 @@ export function Navbar() {
                   <Link
                     key={item.path}
                     href={item.path}
+                    onClick={() => setIsOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 group
                       ${isActive
                         ? "bg-primary text-primary-foreground"
@@ -78,7 +104,8 @@ export function Navbar() {
               </Button>
             </div>
           </SheetContent>
-        </Sheet>
+          </Sheet>
+        </div>
       </div>
     </header>
   );
