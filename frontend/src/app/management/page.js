@@ -54,6 +54,8 @@ export default function ManagementPage() {
   const [catBudget, setCatBudget] = useState(""); // Raw
   const [displayCatBudget, setDisplayCatBudget] = useState(""); // Formatted
   const [isAddToSavings, setIsAddToSavings] = useState(false);
+  const [savingsGoals, setSavingsGoals] = useState([]);
+  const [selectedSavingsGoalId, setSelectedSavingsGoalId] = useState("");
   const [editingCat, setEditingCat] = useState(null);
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [monthPage, setMonthPage] = useState(1);
@@ -113,8 +115,19 @@ export default function ManagementPage() {
     }
   };
 
+  const fetchSavingsGoals = async () => {
+    try {
+      const res = await fetch(`${API_URL}/savings`, { headers: getHeaders() });
+      const data = await res.json();
+      if (res.ok) setSavingsGoals(data);
+    } catch (err) {
+      console.error("Gagal memuat tabungan", err);
+    }
+  };
+
   useEffect(() => {
     fetchMonths();
+    fetchSavingsGoals();
   }, []);
 
   useEffect(() => {
@@ -262,10 +275,12 @@ export default function ManagementPage() {
       return toast.error("Budget kategori melebihi sisa budget bulanan!");
     }
 
-    const body = { name: catName, budget_amount: parseFloat(catBudget) };
-    if (!editingCat) {
-      body.isAddToSavings = isAddToSavings;
-    }
+    const body = { 
+      name: catName, 
+      budget_amount: parseFloat(catBudget),
+      isAddToSavings: isAddToSavings,
+      savings_goal_id: isAddToSavings ? selectedSavingsGoalId : null
+    };
     const url = editingCat ? `${API_URL}/categories/${editingCat.id}` : `${API_URL}/months/${selectedMonthId}/categories`;
     const method = editingCat ? "PUT" : "POST";
 
@@ -294,6 +309,7 @@ export default function ManagementPage() {
     setCatBudget("");
     setDisplayCatBudget("");
     setIsAddToSavings(false);
+    setSelectedSavingsGoalId("");
   };
 
   const confirmDeleteCategory = (c) => {
@@ -570,18 +586,47 @@ export default function ManagementPage() {
                       />
                     </div>
                     {!editingCat && (
-                      <div className="flex items-center space-x-2 pt-2">
-                        <input
-                          type="checkbox"
-                          id="addToSavings"
-                          checked={isAddToSavings}
-                          onChange={(e) => setIsAddToSavings(e.target.checked)}
-                          className="w-4 h-4 rounded border-primary text-primary focus:ring-primary accent-primary"
-                        />
-                        <Label htmlFor="addToSavings" className="text-sm font-medium leading-none cursor-pointer">
-                          Masukkan ke dalam Savings?
-                        </Label>
-                      </div>
+                      <>
+                        <div className="flex items-center space-x-2 pt-2">
+                          <input
+                            type="checkbox"
+                            id="addToSavings"
+                            checked={isAddToSavings}
+                            onChange={(e) => setIsAddToSavings(e.target.checked)}
+                            className="w-4 h-4 rounded border-primary text-primary focus:ring-primary accent-primary"
+                          />
+                          <Label htmlFor="addToSavings" className="text-sm font-medium leading-none cursor-pointer">
+                            Masukkan ke dalam Savings?
+                          </Label>
+                        </div>
+
+                        {isAddToSavings && (
+                          <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-top-1">
+                            <Label className="text-muted-foreground">Pilih Tabungan (Savings Goal)</Label>
+                            <Select 
+                              value={selectedSavingsGoalId} 
+                              onValueChange={setSelectedSavingsGoalId}
+                            >
+                              <SelectTrigger className="bg-muted/50 border-primary/10 h-11 text-base">
+                                <SelectValue placeholder="Pilih target tabungan..." />
+                              </SelectTrigger>
+                              <SelectContent className="bg-card border-primary/20">
+                                {savingsGoals.length > 0 ? (
+                                  savingsGoals.map(sg => (
+                                    <SelectItem key={sg.id} value={sg.id.toString()}>
+                                      {sg.name} ({formatIDR(sg.current_amount)})
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <div className="p-2 text-xs text-muted-foreground italic">
+                                    Belum ada target tabungan yang dibuat.
+                                  </div>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </>
                     )}
                     <DialogFooter>
                       <Button type="submit" className="w-full h-11 font-bold" disabled={actionLoading}>

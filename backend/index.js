@@ -328,7 +328,7 @@ app.get('/api/months/:monthId/categories', authenticate, async (req, res) => {
 
 app.post('/api/months/:monthId/categories', authenticate, async (req, res) => {
     const { monthId } = req.params;
-    const { name, budget_amount, isAddToSavings } = req.body;
+    const { name, budget_amount, isAddToSavings, savings_goal_id } = req.body;
     try {
         const [monthRows] = await db.query('SELECT * FROM month_budgets WHERE id = ? AND user_id = ?', [monthId, req.userId]);
         if (monthRows.length === 0) {
@@ -353,14 +353,21 @@ app.post('/api/months/:monthId/categories', authenticate, async (req, res) => {
             `, [req.userId, monthId, categoryId, 'expense', budget_amount, transactionDate, note, 0]);
 
             // Update or Create savings goal
-            const [existingGoals] = await db.query('SELECT id FROM savings_goals WHERE user_id = ? AND name = ? LIMIT 1', [req.userId, name]);
-            if (existingGoals.length > 0) {
-                const goalId = existingGoals[0].id;
-                await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added) VALUES (?, ?)', [goalId, budget_amount]);
-                await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ?', [budget_amount, goalId]);
+            if (savings_goal_id) {
+                // If savings_goal_id is provided, use it
+                await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added) VALUES (?, ?)', [savings_goal_id, budget_amount]);
+                await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ?', [budget_amount, savings_goal_id]);
             } else {
-                const [sgResult] = await db.query('INSERT INTO savings_goals (user_id, name, target_amount, current_amount) VALUES (?, ?, ?, ?)', [req.userId, name, budget_amount, budget_amount]);
-                await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added) VALUES (?, ?)', [sgResult.insertId, budget_amount]);
+                // Fallback: search by name or create new if not specified (legacy behavior)
+                const [existingGoals] = await db.query('SELECT id FROM savings_goals WHERE user_id = ? AND name = ? LIMIT 1', [req.userId, name]);
+                if (existingGoals.length > 0) {
+                    const goalId = existingGoals[0].id;
+                    await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added) VALUES (?, ?)', [goalId, budget_amount]);
+                    await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ?', [budget_amount, goalId]);
+                } else {
+                    const [sgResult] = await db.query('INSERT INTO savings_goals (user_id, name, target_amount, current_amount) VALUES (?, ?, ?, ?)', [req.userId, name, budget_amount, budget_amount]);
+                    await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added) VALUES (?, ?)', [sgResult.insertId, budget_amount]);
+                }
             }
         }
 

@@ -118,7 +118,7 @@ export default function TransactionsPage() {
     try {
       const res = await fetch(`${API_URL}/months`, { headers: getHeaders() });
       if (res.ok) {
-        const data = await res.ok ? await res.json() : [];
+        const data = await res.json();
         setMonths(data);
       }
     } catch (err) {
@@ -178,11 +178,9 @@ export default function TransactionsPage() {
   }, []);
 
   useEffect(() => {
-    if (months.length > 0) {
-      fetchTransactions();
-      fetchCategories();
-      setCurrentPage(1); // Reset page on month change
-    }
+    fetchTransactions();
+    fetchCategories();
+    setCurrentPage(1); // Reset page on month change
   }, [selectedMonth, months]);
 
   const toRupiah = (value) => {
@@ -609,7 +607,7 @@ export default function TransactionsPage() {
                  <SelectValue placeholder="Kategori" />
                </div>
             </SelectTrigger>
-            <SelectContent className="bg-card border-primary/20">
+            <SelectContent className="bg-card border-primary/20 z-[100]">
               <SelectItem value="all">Semua Kategori</SelectItem>
               {categories.map(c => (
                 <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
@@ -624,7 +622,7 @@ export default function TransactionsPage() {
                  <SelectValue placeholder="Reimburse" />
                </div>
             </SelectTrigger>
-            <SelectContent className="bg-card border-primary/20">
+            <SelectContent className="bg-card border-primary/20 z-[100]">
               <SelectItem value="all">Semua Data</SelectItem>
               <SelectItem value="reimbursed">Reimburse</SelectItem>
               <SelectItem value="not_reimbursed">Non-Reimburse</SelectItem>
@@ -638,7 +636,7 @@ export default function TransactionsPage() {
                  <SelectValue placeholder="Urutkan" />
                </div>
             </SelectTrigger>
-            <SelectContent className="bg-card border-primary/20">
+            <SelectContent className="bg-card border-primary/20 z-[100]">
               <SelectItem value="date-desc">Terbaru</SelectItem>
               <SelectItem value="date-asc">Terlama</SelectItem>
               <SelectItem value="amount-desc">Nominal Tertinggi</SelectItem>
