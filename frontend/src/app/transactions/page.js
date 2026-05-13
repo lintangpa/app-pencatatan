@@ -58,6 +58,7 @@ export default function TransactionsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("date-desc");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [filterReimburse, setFilterReimburse] = useState("all");
 
   // Summary & Dashboard states
   const [summary, setSummary] = useState({
@@ -87,6 +88,26 @@ export default function TransactionsPage() {
     note: "",
     is_reimbursed: false
   });
+
+  // Reorder Category state
+  const [categoryOrder, setCategoryOrder] = useState([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('categoryOrder');
+    if (saved) {
+      try {
+        setCategoryOrder(JSON.parse(saved));
+      } catch (e) {
+        setCategoryOrder([]);
+      }
+    }
+  }, []);
+
+  const parseDateSafe = (dateString) => {
+    if (!dateString) return new Date();
+    if (dateString.includes('T')) return new Date(dateString);
+    return new Date(dateString.replace(/-/g, '/'));
+  };
 
   const getHeaders = () => ({
     "Authorization": localStorage.getItem("token"),
@@ -242,12 +263,14 @@ export default function TransactionsPage() {
 
   const openEdit = (t) => {
     setEditingTransaction(t);
+    const dateObj = parseDateSafe(t.transaction_date);
+    const localDateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
     setFormData({
-      transaction_date: t.transaction_date.slice(0, 10),
+      transaction_date: localDateStr,
       category_budget_id: t.category_budget_id?.toString() || "",
       type: t.type,
-      amount: t.amount.toString(),
-      displayAmount: toRupiah(t.amount.toString()),
+      amount: Math.round(t.amount).toString(),
+      displayAmount: toRupiah(Math.round(t.amount).toString()),
       note: t.note || "",
       is_reimbursed: !!t.is_reimbursed
     });
@@ -285,11 +308,12 @@ export default function TransactionsPage() {
       const matchSearch = t.note?.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           getCategoryName(t.category_budget_id).toLowerCase().includes(searchQuery.toLowerCase());
       const matchCategory = filterCategory === "all" || t.category_budget_id?.toString() === filterCategory;
-      return matchSearch && matchCategory;
+      const matchReimburse = filterReimburse === "all" || (filterReimburse === "reimbursed" && t.is_reimbursed) || (filterReimburse === "not_reimbursed" && !t.is_reimbursed);
+      return matchSearch && matchCategory && matchReimburse;
     })
     .sort((a, b) => {
-      if (sortBy === "date-desc") return new Date(b.transaction_date) - new Date(a.transaction_date);
-      if (sortBy === "date-asc") return new Date(a.transaction_date) - new Date(b.transaction_date);
+      if (sortBy === "date-desc") return parseDateSafe(b.transaction_date) - parseDateSafe(a.transaction_date);
+      if (sortBy === "date-asc") return parseDateSafe(a.transaction_date) - parseDateSafe(b.transaction_date);
       if (sortBy === "amount-desc") return b.amount - a.amount;
       if (sortBy === "amount-asc") return a.amount - b.amount;
       return 0;
@@ -303,6 +327,41 @@ export default function TransactionsPage() {
 
   const getCategoryName = (id) => {
     return categories.find(c => c.id === id)?.name || "Tanpa Kategori";
+  };
+
+  const totalReimburse = transactions
+    .filter(t => t.is_reimbursed)
+    .reduce((acc, t) => acc + (t.type === 'expense' ? parseFloat(t.amount) : -parseFloat(t.amount)), 0);
+
+  const sortedCategories = [...(summary.detail_kategori || [])].sort((a, b) => {
+    const indexA = categoryOrder.indexOf(a.id);
+    const indexB = categoryOrder.indexOf(b.id);
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1; // Put unknown at the end
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+
+  const moveCategory = (catId, direction) => {
+    let currentIds = sortedCategories.map(c => c.id);
+    const index = currentIds.indexOf(catId);
+    if (index === -1) return;
+    
+    if (direction === -1 && index > 0) {
+      const temp = currentIds[index - 1];
+      currentIds[index - 1] = currentIds[index];
+      currentIds[index] = temp;
+    } else if (direction === 1 && index < currentIds.length - 1) {
+      const temp = currentIds[index + 1];
+      currentIds[index + 1] = currentIds[index];
+      currentIds[index] = temp;
+    } else {
+      return;
+    }
+
+    setCategoryOrder(currentIds);
+    localStorage.setItem('categoryOrder', JSON.stringify(currentIds));
+    toast.success("Urutan kategori disimpan (lokal)");
   };
 
   return (
@@ -325,7 +384,7 @@ export default function TransactionsPage() {
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 onClick={(e) => e.target.showPicker && e.target.showPicker()}
-                className="pl-9 bg-card border-primary/20 h-10 w-40 text-sm font-medium"
+                className="pl-9 bg-card border-primary/20 h-10 w-40 text-base font-medium"
              />
            </div>
 
@@ -348,7 +407,7 @@ export default function TransactionsPage() {
                         value={formData.transaction_date}
                         onChange={(e) => setFormData({...formData, transaction_date: e.target.value})}
                         required
-                        className="bg-muted/50 border-primary/10 h-11"
+                        className="bg-muted/50 border-primary/10 h-11 text-base"
                       />
                     </div>
                     <div className="space-y-2">
@@ -372,11 +431,12 @@ export default function TransactionsPage() {
                     <Label className="text-muted-foreground">Jumlah</Label>
                     <Input 
                       type="text" 
+                      inputMode="numeric"
                       value={formData.displayAmount}
                       onChange={handleAmountChange}
                       required
                       placeholder="Rp0"
-                      className="bg-muted/50 border-primary/10 h-11 text-lg font-bold text-primary"
+                      className="bg-muted/50 border-primary/10 h-11 text-lg font-bold text-primary text-base"
                     />
                   </div>
 
@@ -406,7 +466,7 @@ export default function TransactionsPage() {
                       value={formData.note}
                       onChange={(e) => setFormData({...formData, note: e.target.value})}
                       placeholder="misal: Beli makan siang"
-                      className="bg-muted/50 border-primary/10 h-11"
+                      className="bg-muted/50 border-primary/10 h-11 text-base"
                     />
                   </div>
 
@@ -418,7 +478,7 @@ export default function TransactionsPage() {
                       onChange={(e) => setFormData({...formData, is_reimbursed: e.target.checked})}
                       className="w-5 h-5 rounded border-primary/20 text-primary focus:ring-primary/50 bg-transparent"
                     />
-                    <Label htmlFor="is_reimbursed" className="cursor-pointer font-medium">Bisa Di-reimburse</Label>
+                    <Label htmlFor="is_reimbursed" className="cursor-pointer font-medium">Reimburse</Label>
                   </div>
 
                   <DialogFooter>
@@ -434,7 +494,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* SUMMARY SECTION */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
          <Card className="bg-card/40 border-primary/10 overflow-hidden relative group">
             <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
               <Wallet className="w-12 h-12 text-primary" />
@@ -464,36 +524,69 @@ export default function TransactionsPage() {
               </h3>
             </CardContent>
          </Card>
+         <Card className="bg-card/40 border-primary/10 overflow-hidden relative group">
+            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Receipt className="w-12 h-12 text-blue-500" />
+            </div>
+            <CardContent className="p-5">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Reimburse</p>
+              <h3 className="text-xl font-black mt-1 text-blue-400">{formatIDR(totalReimburse)}</h3>
+            </CardContent>
+         </Card>
       </div>
 
       {/* CATEGORY SCROLL */}
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x">
-         {summary.detail_kategori?.map((cat, idx) => (
-           <Card key={idx} className="min-w-[200px] bg-primary/5 border-primary/10 snap-start">
-             <CardContent className="p-3">
-                <p className="text-xs font-bold text-primary/80 truncate uppercase">{cat.name}</p>
-                <div className="mt-2 space-y-1 text-[11px]">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Budget:</span>
-                    <span className="font-semibold">{formatIDR(cat.budget_amount)}</span>
+      <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x items-center" style={{ WebkitOverflowScrolling: 'touch' }}>
+         {sortedCategories.map((cat, idx) => (
+           <div key={cat.id} className="min-w-[220px] snap-start relative group/cat flex-shrink-0">
+             <Card className="bg-primary/5 border-primary/10">
+               <CardContent className="p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-primary/80 truncate uppercase">{cat.name}</p>
+                    <div className="flex gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-5 w-5 bg-primary/10 hover:bg-primary/20 text-primary rounded-full p-0 flex items-center justify-center"
+                        onClick={() => moveCategory(cat.id, -1)}
+                        disabled={idx === 0}
+                      >
+                        <ChevronLeft className="w-3 h-3" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-5 w-5 bg-primary/10 hover:bg-primary/20 text-primary rounded-full p-0 flex items-center justify-center"
+                        onClick={() => moveCategory(cat.id, 1)}
+                        disabled={idx === sortedCategories.length - 1}
+                      >
+                        <ChevronRight className="w-3 h-3" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Terpakai:</span>
-                    <span className="font-semibold text-red-400">{formatIDR(cat.total_spent)}</span>
+                  <div className="mt-2 space-y-1 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Budget:</span>
+                      <span className="font-semibold">{formatIDR(cat.budget_amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Terpakai:</span>
+                      <span className="font-semibold text-red-400">{formatIDR(cat.total_spent)}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-primary/10 pt-1 mt-1">
+                      <span className="text-muted-foreground">Sisa:</span>
+                      <span className="font-bold text-green-400">{formatIDR(cat.budget_amount - cat.total_spent)}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between border-t border-primary/10 pt-1 mt-1">
-                    <span className="text-muted-foreground">Sisa:</span>
-                    <span className="font-bold text-green-400">{formatIDR(cat.budget_amount - cat.total_spent)}</span>
+                  <div className="mt-2 h-1 w-full bg-primary/10 rounded-full overflow-hidden">
+                     <div 
+                      className="h-full bg-primary" 
+                      style={{ width: `${Math.min((cat.total_spent / cat.budget_amount) * 100, 100)}%` }}
+                     ></div>
                   </div>
-                </div>
-                <div className="mt-2 h-1 w-full bg-primary/10 rounded-full overflow-hidden">
-                   <div 
-                    className="h-full bg-primary" 
-                    style={{ width: `${Math.min((cat.total_spent / cat.budget_amount) * 100, 100)}%` }}
-                   ></div>
-                </div>
-             </CardContent>
-           </Card>
+               </CardContent>
+             </Card>
+           </div>
          ))}
       </div>
 
@@ -505,10 +598,10 @@ export default function TransactionsPage() {
             placeholder="Cari transaksi..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-card border-primary/20 h-11 rounded-2xl"
+            className="pl-10 bg-card border-primary/20 h-11 rounded-2xl text-base"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Select value={filterCategory} onValueChange={setFilterCategory}>
             <SelectTrigger className="bg-card border-primary/20 h-11 rounded-2xl w-[160px]">
                <div className="flex items-center gap-2">
@@ -521,6 +614,20 @@ export default function TransactionsPage() {
               {categories.map(c => (
                 <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterReimburse} onValueChange={setFilterReimburse}>
+            <SelectTrigger className="bg-card border-primary/20 h-11 rounded-2xl w-[150px]">
+               <div className="flex items-center gap-2">
+                 <CheckCircle2 className="w-4 h-4 text-primary" />
+                 <SelectValue placeholder="Reimburse" />
+               </div>
+            </SelectTrigger>
+            <SelectContent className="bg-card border-primary/20">
+              <SelectItem value="all">Semua Data</SelectItem>
+              <SelectItem value="reimbursed">Reimburse</SelectItem>
+              <SelectItem value="not_reimbursed">Non-Reimburse</SelectItem>
             </SelectContent>
           </Select>
 
@@ -550,7 +657,14 @@ export default function TransactionsPage() {
           </div>
         ) : processedTransactions.length > 0 ? (
           processedTransactions.map((t) => (
-            <Card key={t.id} className="bg-card/40 border-primary/10 group hover:border-primary/30 transition-all overflow-hidden rounded-2xl">
+            <Card 
+              key={t.id} 
+              className={`group transition-all overflow-hidden rounded-2xl border ${
+                t.is_reimbursed 
+                  ? 'bg-blue-500/5 border-blue-500/30 hover:border-blue-500/50 shadow-sm shadow-blue-500/10' 
+                  : 'bg-card/40 border-primary/10 hover:border-primary/30'
+              }`}
+            >
               <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center 
@@ -564,7 +678,7 @@ export default function TransactionsPage() {
                         {getCategoryName(t.category_budget_id)}
                       </span>
                       <span>•</span>
-                      <span>{new Date(t.transaction_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
+                      <span>{parseDateSafe(t.transaction_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
                     </div>
                   </div>
                 </div>
@@ -575,7 +689,7 @@ export default function TransactionsPage() {
                       {t.type === 'income' ? '+' : '-'} {formatIDR(t.amount)}
                     </p>
                     {t.is_reimbursed ? (
-                      <div className="flex items-center justify-end gap-1 text-[10px] text-primary/70 font-bold mt-1 bg-primary/10 px-2 py-0.5 rounded-full">
+                      <div className="flex items-center justify-end gap-1 text-[10px] text-blue-600 dark:text-blue-400 font-bold mt-1 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
                         <CheckCircle2 className="w-3 h-3" /> REIMBURSE
                       </div>
                     ) : null}

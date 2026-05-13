@@ -1,60 +1,74 @@
-# Task: Peningkatan Fitur Autentikasi (Register & Login)
+# Task / Issue Planning: Perbaikan UI/UX dan Fitur Category
 
-## Deskripsi Tugas
-Tugas ini mencakup perbaikan dan penambahan fitur pada alur autentikasi aplikasi. Tujuan utamanya adalah meningkatkan keamanan data pengguna serta memberikan *User Experience* (UX) yang lebih baik pada halaman login dan register.
+Dokumen ini berisi panduan implementasi langkah demi langkah untuk mengerjakan 3 fitur/perbaikan baru. Baca secara teliti dan ikuti instruksi pada setiap tahapannya.
 
-Fitur yang harus diimplementasikan:
-1. **Popup & Redirect (Register):** Menampilkan pesan/popup sukses saat pengguna berhasil membuat akun, lalu mengarahkannya (*redirect*) ke halaman login.
-2. **Kunci Scroll (Login):** Mengatur halaman login agar pas dalam satu layar (100vh) dan tidak dapat di-scroll.
-3. **Hashing Password:** Menggunakan `bcrypt` di sisi backend untuk mengenkripsi password sebelum disimpan ke database.
+## Daftar Fitur yang Akan Diimplementasikan:
+1. **Reorder Kategori**: Pengguna dapat mengubah urutan kategori (yang bisa di-scroll) pada halaman transaksi.
+2. **Integrasi Kategori Baru & Tabungan (Savings)**: Saat membuat kategori baru, terdapat opsi untuk memasukkannya ke dalam *savings*. Jika dipilih, sistem akan otomatis membuat transaksi baru dan menambah saldo *savings* sesuai dengan nominal budget kategori tersebut.
+3. **Kompatibilitas Safari (iOS)**: Memastikan semua fitur dan tampilan berjalan mulus tanpa bug di browser Safari (khususnya iOS).
 
 ---
 
-## Tahapan Implementasi Rinci
+## Tahapan Implementasi Secara Rinci
 
-### 1. Implementasi Hashing Password dengan `bcrypt` (Backend)
-**Lokasi Modifikasi:** Endpoint Register (misalnya di `backend/controllers/authController.js` atau file endpoint terkait seperti `backend/index.js`)
+### Fase 1: Backend (Database & API)
 
-**Langkah-langkah:**
-1. Pastikan package `bcrypt` atau `bcryptjs` sudah terinstall. Jika belum, jalankan perintah `npm install bcrypt` pada folder backend.
-2. Import `bcrypt` ke dalam file controller registrasi (`const bcrypt = require('bcrypt');`).
-3. Pada fungsi untuk *handle* register, tangkap variabel `password` dari `req.body`.
-4. Lakukan hashing password menggunakan `bcrypt.hash()`. Gunakan *salt rounds* sebesar 10 (standar keamanan yang baik).
-   ```javascript
-   const saltRounds = 10;
-   const hashedPassword = await bcrypt.hash(password, saltRounds);
-   ```
-5. Simpan `hashedPassword` ke dalam database, jangan menyimpan `password` asli (plain-text).
-6. **Perhatian:** Jangan lupa juga memperbarui bagian endpoint **Login** untuk mencocokkan password menggunakan `bcrypt.compare(passwordInput, passwordDariDatabase)`.
+#### 1.1 Modifikasi Endpoint Pembuatan Kategori (`POST /api/categories`)
+- **Tugas**: Tambahkan parameter body baru, misalnya `isAddToSavings` (boolean).
+- **Proses**:
+  1. Lakukan validasi, jika `isAddToSavings` adalah `true`, pastikan parameter `budget` (atau nominal target) memiliki nilai yang valid (> 0).
+  2. Insert data kategori baru ke dalam tabel `categories`.
+  3. **Jika `isAddToSavings` bernilai `true`**:
+     - Buat sebuah baris transaksi baru secara otomatis di tabel `transactions`.
+     - Tipe transaksi: *Income* atau *Transfer ke Savings* (sesuaikan dengan struktur yang sudah ada).
+     - Nominal transaksi: Mengambil dari nominal `budget` kategori tersebut.
+     - Deskripsi: "Alokasi awal tabungan untuk kategori: [Nama Kategori]".
+     - Jika ada tabel terpisah untuk saldo *savings*, lakukan update/increment saldo tersebut secara atomic menggunakan *database transaction* untuk mencegah inkonsistensi data.
+- **Output**: Kembalikan data kategori yang baru dibuat berserta status penambahan transaksi (jika ada).
 
-### 2. Implementasi Popup Sukses dan Redirect (Frontend)
-**Lokasi Modifikasi:** Komponen / Halaman Register (misalnya di `frontend/app/register/page.tsx` atau direktori serupa)
+---
 
-**Langkah-langkah:**
-1. Buka fungsi *handler* yang menangani pengiriman *form* registrasi (misalnya `onSubmit` atau `handleSubmit`).
-2. Setelah permintaan API registrasi selesai dan mengembalikan status sukses (misal HTTP 201 Created atau 200 OK), hentikan proses loading.
-3. Tampilkan notifikasi popup berhasil. Anda bisa menggunakan komponen *Toast* bawaan Shadcn UI, `sweetalert2`, atau komponen notifikasi yang sudah ada di proyek.
-4. Tambahkan jeda waktu sementara menggunakan `setTimeout` (misal 1500ms - 2000ms) agar pengguna sempat membaca popup.
-5. Setelah jeda selesai, lakukan *redirect* ke rute `/login`. Jika menggunakan Next.js, gunakan `router.push('/login')` dari `useRouter()`.
+### Fase 2: Frontend (UI/UX & Interaksi)
 
-### 3. Mengunci *Scroll* pada Halaman Login (Frontend)
-**Lokasi Modifikasi:** Komponen / Halaman Login (misalnya di `frontend/app/login/page.tsx` atau direktori serupa)
+#### 2.1 Fitur Reorder Kategori pada Halaman Transaksi (Client-Side Only)
+- **Tugas**: Di halaman Transaksi, pada bagian list kategori yang *scrollable*, tambahkan mode edit atau mekanisme *drag-and-drop*. Karena di-handle secara *Frontend Only*, urutan akan disimpan di peramban (browser) pengguna secara lokal.
+  - *Saran Library*: Jika menggunakan React, gunakan library yang ringan untuk drag-and-drop (misal: `@hello-pangea/dnd` atau `dnd-kit`). Jika ingin sederhana, bisa gunakan tombol panah (Up/Down) di samping masing-masing kategori.
+- **Proses**:
+  - Setelah pengguna selesai mengubah urutan, simpan urutan ID kategori yang baru ke dalam `localStorage` (contoh: `localStorage.setItem('categoryOrder', JSON.stringify(orderedIds))`).
+  - Saat komponen list kategori ditampilkan (*mounted*) dan menerima data kategori dari API, periksa urutan ID yang tersimpan di `localStorage`. Lakukan sorting *array* kategori berdasarkan urutan yang ada di `localStorage`. Jika ada kategori baru yang ID-nya belum ada di penyimpanan lokal, posisikan di bagian paling akhir.
+  - Tampilkan notifikasi *success* bahwa urutan telah disimpan (tersimpan secara lokal pada perangkat ini).
 
-**Langkah-langkah:**
-Pendekatan yang direkomendasikan adalah dengan membatasi *height* atau menggunakan `overflow: hidden`.
+#### 2.2 Penambahan Opsi "Add to Savings" pada Form Buat Kategori
+- **Tugas**: Pada komponen form atau modal *Create Category*, tambahkan sebuah *Switch* atau *Checkbox*: **"Masukkan ke dalam Savings?"**.
+- **Proses**:
+  - Jika dicentang, pastikan input nominal budget wajib diisi (*required*).
+  - Saat form di-*submit*, sertakan *payload* `isAddToSavings: true` beserta data kategori lainnya ke endpoint `POST /api/categories`.
+  - Setelah berhasil disubmit, lakukan *refetch* atau perbarui *state* global (termasuk *state* saldo *savings* dan daftar transaksi jika ditampilkan di halaman yang sama) agar UI langsung ter-update secara *real-time*.
 
-**Pendekatan React `useEffect` (Direkomendasikan):**
-1. Import `useEffect` dari React.
-2. Tambahkan *hook* `useEffect` untuk mengubah styling `body` saat komponen login di-render:
-   ```javascript
-   useEffect(() => {
-     // Kunci scroll ketika masuk halaman login
-     document.body.style.overflow = 'hidden';
+---
 
-     // Kembalikan scroll (cleanup) ketika pindah dari halaman login
-     return () => {
-       document.body.style.overflow = 'auto'; // atau ''
-     };
-   }, []);
-   ```
-3. Pastikan *container* / *wrapper* utama halaman login dirancang menggunakan flexbox atau grid dengan tinggi layar penuh (`h-screen` atau `min-h-screen` pada Tailwind) agar elemen login tetap berada tepat di tengah layar tanpa terpotong.
+### Fase 3: Kompatibilitas Khusus Safari (iOS)
+
+Pada fase ini, periksa dan perbaiki kode frontend agar berjalan sempurna di perangkat iOS (iPhone/iPad).
+
+#### 3.1 Pencegahan Auto-Zoom pada Input Form
+- **Tugas**: Safari iOS secara otomatis melakukan zoom saat mengklik `<input>` atau `<textarea>` jika ukuran font kurang dari `16px`.
+- **Aksi**: Pastikan semua input pada form pembuatan kategori dan transaksi menggunakan kelas Tailwind `text-base` atau mendefinisikan CSS `font-size: 16px;`.
+
+#### 3.2 Parsing Tanggal (Date) yang Aman
+- **Tugas**: Safari sangat ketat mengenai format tanggal. Penggunaan `new Date('2024-05-14 10:00:00')` akan menghasilkan `Invalid Date`.
+- **Aksi**: Pastikan konversi tanggal dari backend selalu menggunakan format standar ISO 8601 (misal `YYYY-MM-DDTHH:mm:ss.sssZ`) atau ubah tanda hubung menjadi garis miring `new Date(dateString.replace(/-/g, '/'))` sebelum memproses tanggal di Frontend.
+
+#### 3.3 Penanganan Scrollable Container
+- **Tugas**: Memastikan *scroll* pada daftar kategori terasa mulus (native feel) di iOS.
+- **Aksi**: Tambahkan class Tailwind yang mengatur overscroll, seperti memastikan adanya `-webkit-overflow-scrolling: touch` pada container list kategori yang horizontal. (Bisa menggunakan class pendukung di Tailwind jika diperlukan).
+
+#### 3.4 Isu Flexbox dan Gap (Legacy iOS)
+- **Tugas**: Jika aplikasi menargetkan iOS Safari versi lama (< 14.5), property `gap` pada flexbox bisa jadi tidak berfungsi.
+- **Aksi**: Uji bagian scrollable list kategori di emulator iOS. Pastikan jarak antar *chip* kategori tidak bertumpuk. Jika perlu, sediakan *fallback* menggunakan *margin*.
+
+---
+
+### Catatan Tambahan untuk Developer
+- Jangan lupa tambahkan penanganan *error handling* (*try-catch*) pada setiap panggilan API dan gunakan komponen Toast (`sonner` / `react-hot-toast`) untuk memberikan *feedback* kepada pengguna.
+- Pastikan perubahan *state* dilakukan secara sinkron setelah aksi berhasil di *backend* agar pengguna tidak perlu melakukan *refresh* (F5) untuk melihat perubahannya.

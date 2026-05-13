@@ -219,6 +219,49 @@ app.post('/api/users/logout', async (req, res) => {
     }
 });
 
+app.put('/api/users/change-password', authenticate, async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    try {
+        const [rows] = await db.query('SELECT password FROM users WHERE id = ?', [req.userId]);
+        if (rows.length === 0) {
+            return res.status(404).json({ message: "User tidak ditemukan" });
+        }
+
+        const user = rows[0];
+        const isMatch = await bcrypt.compare(oldPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Password lama salah" });
+        }
+
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+        await db.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.userId]);
+
+        res.json({ message: "Password berhasil diubah" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/users/reset-password', async (req, res) => {
+    const { username } = req.body;
+    try {
+        const [rows] = await db.query('SELECT id FROM users WHERE username = ?', [username]);
+        if (rows.length === 0) {
+            return res.status(404).json({ message: "Username tidak ditemukan" });
+        }
+
+        const defaultPassword = "halokalin";
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(defaultPassword, saltRounds);
+        await db.query('UPDATE users SET password = ? WHERE username = ?', [hashedPassword, username]);
+
+        res.json({ message: "Password berhasil direset menjadi halokalin" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Month Budgets Routes
 app.get('/api/months', authenticate, async (req, res) => {
     try {
@@ -285,14 +328,42 @@ app.get('/api/months/:monthId/categories', authenticate, async (req, res) => {
 
 app.post('/api/months/:monthId/categories', authenticate, async (req, res) => {
     const { monthId } = req.params;
-    const { name, budget_amount } = req.body;
+    const { name, budget_amount, isAddToSavings } = req.body;
     try {
         const [monthRows] = await db.query('SELECT * FROM month_budgets WHERE id = ? AND user_id = ?', [monthId, req.userId]);
         if (monthRows.length === 0) {
             return res.status(404).json({ message: "Bulan budget tidak ditemukan" });
         }
 
-        await db.query('INSERT INTO category_budgets (month_budget_id, name, budget_amount) VALUES (?, ?, ?)', [monthId, name, budget_amount]);
+        if (isAddToSavings && (!budget_amount || budget_amount <= 0)) {
+            return res.status(400).json({ message: "Nominal budget tidak valid untuk dimasukkan ke savings" });
+        }
+
+        const [catResult] = await db.query('INSERT INTO category_budgets (month_budget_id, name, budget_amount) VALUES (?, ?, ?)', [monthId, name, budget_amount]);
+
+        if (isAddToSavings) {
+            const categoryId = catResult.insertId;
+            const transactionDate = new Date().toISOString().split('T')[0];
+            const note = `Alokasi awal tabungan untuk kategori: ${name}`;
+
+            // Create expense transaction
+            await db.query(`
+                INSERT INTO transactions (user_id, month_budget_id, category_budget_id, type, amount, transaction_date, note, is_reimbursed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `, [req.userId, monthId, categoryId, 'expense', budget_amount, transactionDate, note, 0]);
+
+            // Update or Create savings goal
+            const [existingGoals] = await db.query('SELECT id FROM savings_goals WHERE user_id = ? AND name = ? LIMIT 1', [req.userId, name]);
+            if (existingGoals.length > 0) {
+                const goalId = existingGoals[0].id;
+                await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added) VALUES (?, ?)', [goalId, budget_amount]);
+                await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ?', [budget_amount, goalId]);
+            } else {
+                const [sgResult] = await db.query('INSERT INTO savings_goals (user_id, name, target_amount, current_amount) VALUES (?, ?, ?, ?)', [req.userId, name, budget_amount, budget_amount]);
+                await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added) VALUES (?, ?)', [sgResult.insertId, budget_amount]);
+            }
+        }
+
         res.status(201).json({ message: "Kategori budget berhasil ditambahkan" });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -521,6 +592,20 @@ app.post('/api/savings', authenticate, async (req, res) => {
     try {
         await db.query('INSERT INTO savings_goals (user_id, name, target_amount, deadline) VALUES (?, ?, ?, ?)', [req.userId, name, target_amount, deadline]);
         res.status(201).json({ message: "Savings goal berhasil dibuat" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/savings/:id', authenticate, async (req, res) => {
+    const { id } = req.params;
+    const { name, target_amount, deadline } = req.body;
+    try {
+        const [result] = await db.query('UPDATE savings_goals SET name = ?, target_amount = ?, deadline = ? WHERE id = ? AND user_id = ?', [name, target_amount, deadline, id, req.userId]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: "Goal tidak ditemukan atau bukan milik Anda" });
+        }
+        res.json({ message: "Savings goal berhasil diperbarui" });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

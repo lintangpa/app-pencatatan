@@ -53,6 +53,7 @@ export default function ManagementPage() {
   const [catName, setCatName] = useState("");
   const [catBudget, setCatBudget] = useState(""); // Raw
   const [displayCatBudget, setDisplayCatBudget] = useState(""); // Formatted
+  const [isAddToSavings, setIsAddToSavings] = useState(false);
   const [editingCat, setEditingCat] = useState(null);
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [monthPage, setMonthPage] = useState(1);
@@ -262,6 +263,9 @@ export default function ManagementPage() {
     }
 
     const body = { name: catName, budget_amount: parseFloat(catBudget) };
+    if (!editingCat) {
+      body.isAddToSavings = isAddToSavings;
+    }
     const url = editingCat ? `${API_URL}/categories/${editingCat.id}` : `${API_URL}/months/${selectedMonthId}/categories`;
     const method = editingCat ? "PUT" : "POST";
 
@@ -289,6 +293,7 @@ export default function ManagementPage() {
     setCatName("");
     setCatBudget("");
     setDisplayCatBudget("");
+    setIsAddToSavings(false);
   };
 
   const confirmDeleteCategory = (c) => {
@@ -368,7 +373,7 @@ export default function ManagementPage() {
                         onChange={(e) => setMonthDate(e.target.value)} 
                         onClick={(e) => e.target.showPicker && e.target.showPicker()}
                         required 
-                        className="pl-10 bg-muted/50 border-primary/10 focus:border-primary/40 transition-colors h-11 text-foreground cursor-pointer"
+                        className="pl-10 bg-muted/50 border-primary/10 focus:border-primary/40 transition-colors h-11 text-foreground cursor-pointer text-base"
                       />
                     </div>
                   </div>
@@ -376,11 +381,12 @@ export default function ManagementPage() {
                     <Label className="text-muted-foreground">Maksimal Budget (Batas Pengeluaran)</Label>
                     <Input 
                       type="text" 
+                      inputMode="numeric"
                       value={displayMaxBudget} 
                       onChange={(e) => handleBudgetChange(e, setMaxBudget, setDisplayMaxBudget)} 
                       required 
                       placeholder="Rp0"
-                      className="bg-muted/50 border-primary/10 focus:border-primary/40 transition-colors h-11 text-foreground"
+                      className="bg-muted/50 border-primary/10 focus:border-primary/40 transition-colors h-11 text-foreground text-base"
                     />
                   </div>
                   <DialogFooter>
@@ -422,7 +428,7 @@ export default function ManagementPage() {
                     onClick={() => {
                       setEditingMonth(m);
                       setMonthDate(`${m.year}-${String(m.month).padStart(2, '0')}`);
-                      const budget = m.max_budget.toString();
+                      const budget = Math.round(m.max_budget).toString();
                       setMaxBudget(budget);
                       setDisplayMaxBudget(toRupiah(budget));
                       setIsMonthModalOpen(true);
@@ -548,20 +554,35 @@ export default function ManagementPage() {
                         onChange={(e) => setCatName(e.target.value)} 
                         required 
                         placeholder="misal: Makan & Jajan"
-                        className="bg-muted/50 border-primary/10 h-11"
+                        className="bg-muted/50 border-primary/10 h-11 text-base"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-muted-foreground">Budget Maksimal Kategori</Label>
                       <Input 
                         type="text" 
+                        inputMode="numeric"
                         value={displayCatBudget} 
                         onChange={(e) => handleBudgetChange(e, setCatBudget, setDisplayCatBudget)} 
                         required 
                         placeholder="Rp0"
-                        className="bg-muted/50 border-primary/10 h-11"
+                        className="bg-muted/50 border-primary/10 h-11 text-base"
                       />
                     </div>
+                    {!editingCat && (
+                      <div className="flex items-center space-x-2 pt-2">
+                        <input
+                          type="checkbox"
+                          id="addToSavings"
+                          checked={isAddToSavings}
+                          onChange={(e) => setIsAddToSavings(e.target.checked)}
+                          className="w-4 h-4 rounded border-primary text-primary focus:ring-primary accent-primary"
+                        />
+                        <Label htmlFor="addToSavings" className="text-sm font-medium leading-none cursor-pointer">
+                          Masukkan ke dalam Savings?
+                        </Label>
+                      </div>
+                    )}
                     <DialogFooter>
                       <Button type="submit" className="w-full h-11 font-bold" disabled={actionLoading}>
                         {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -604,7 +625,7 @@ export default function ManagementPage() {
                   <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full hover:bg-primary/10 text-primary" onClick={() => {
                     setEditingCat(c); 
                     setCatName(c.name); 
-                    const budget = c.budget_amount.toString();
+                    const budget = Math.round(c.budget_amount).toString();
                     setCatBudget(budget);
                     setDisplayCatBudget(toRupiah(budget));
                     setIsCatModalOpen(true);
