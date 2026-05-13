@@ -9,6 +9,10 @@ const plusJakarta = Plus_Jakarta_Sans({
 export const metadata = {
   title: "Pencatatan Keuangan",
   description: "Aplikasi pencatatan keuangan pribadi",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  }
 };
 
 import { Navbar } from "@/components/Navbar";
@@ -23,7 +27,7 @@ export default function RootLayout({ children }) {
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans bg-background text-foreground">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <Navbar />
           <main className="flex-1 pt-16">
             {children}

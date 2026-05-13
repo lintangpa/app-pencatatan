@@ -44,7 +44,7 @@ import {
 import { toast } from "sonner";
 import { AlertDialog } from "@/components/ui/alert-dialog-custom";
 
-const API_URL = "http://localhost:3001/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState([]);

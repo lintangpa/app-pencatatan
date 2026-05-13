@@ -27,7 +27,7 @@ export function Navbar() {
   }, []);
 
   // Jangan tampilkan navbar di halaman login & register
-  if (pathname === "/login" || pathname === "/register") return null;
+  if (pathname === "/login" || pathname === "/register" || pathname === "/login/" || pathname === "/register/") return null;
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -38,7 +38,7 @@ export function Navbar() {
     <header className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-primary/20">
       <div className="flex h-16 items-center justify-between px-4 md:px-8">
         <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-          <Wallet className="text-primary w-6 h-6" />
+          <img src="/hk.png" alt="Logo" className="w-8 h-8 rounded-lg object-cover" />
           <span className="hidden sm:inline">HaloKalin</span>
         </Link>
         
@@ -67,7 +67,7 @@ export function Navbar() {
           <SheetContent side="right" className="flex flex-col h-full bg-card/95 border-primary/20 w-[280px]">
             <SheetHeader className="border-b border-primary/10 pb-4 mb-4">
               <SheetTitle className="text-left flex items-center gap-2">
-                <Wallet className="text-primary" />
+                <img src="/hk.png" alt="Logo" className="w-6 h-6 rounded-md object-cover" />
                 HaloKalin
               </SheetTitle>
             </SheetHeader>

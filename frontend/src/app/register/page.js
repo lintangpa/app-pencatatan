@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
@@ -21,7 +24,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:3001/api/register", {
+      const res = await fetch(`${API_URL}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -30,8 +33,12 @@ export default function RegisterPage() {
       const data = await res.json();
 
       if (res.ok) {
-        alert("Registrasi berhasil! Silakan login.");
-        router.push("/login");
+        toast.success("Registrasi berhasil!", {
+          description: "Silakan masuk dengan akun baru Anda.",
+        });
+        setTimeout(() => {
+          router.push("/login");
+        }, 1500);
       } else {
         setError(data.message || "Registrasi gagal");
       }

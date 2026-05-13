@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const db = require('./db');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+
 require('dotenv').config();
 
 const app = express();
@@ -167,7 +169,9 @@ app.delete('/api/notes/:id', async (req, res) => {
 app.post('/api/register', async (req, res) => {
     const { username, password } = req.body;
     try {
-        await db.query('INSERT INTO users (username, password) VALUES (?, ?)', [username, password]);
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        await db.query('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword]);
         res.status(201).json({ message: "User berhasil ditambahkan" });
     } catch (err) {
         res.status(500).json({ message: "User gagal dibuat" });
@@ -177,12 +181,18 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/users/login', async (req, res) => {
     const { username, password } = req.body;
     try {
-        const [rows] = await db.query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
+        const [rows] = await db.query('SELECT * FROM users WHERE username = ?', [username]);
         if (rows.length === 0) {
             return res.status(401).json({ message: "Username atau password salah" });
         }
 
         const user = rows[0];
+        const isPasswordMatch = await bcrypt.compare(password, user.password);
+        
+        if (!isPasswordMatch) {
+            return res.status(401).json({ message: "Username atau password salah" });
+        }
+
         const token = crypto.randomUUID();
         await db.query('INSERT INTO sessions (id, user_id) VALUES (?, ?)', [token, user.id]);
 
