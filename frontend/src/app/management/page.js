@@ -275,6 +275,10 @@ export default function ManagementPage() {
       return toast.error("Budget kategori melebihi sisa budget bulanan!");
     }
 
+    if (isAddToSavings && !selectedSavingsGoalId) {
+      return toast.error("Pilih target tabungan terlebih dahulu!");
+    }
+
     const body = { 
       name: catName, 
       budget_amount: parseFloat(catBudget),

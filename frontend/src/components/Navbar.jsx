@@ -13,6 +13,7 @@ const menuItems = [
   { name: "Management", path: "/management", icon: Settings },
   { name: "Transaksi", path: "/transactions", icon: History },
   { name: "Savings", path: "/savings", icon: Target },
+  { name: "Setting", path: "/setting", icon: Settings },
 ];
 
 export function Navbar() {
@@ -26,8 +27,8 @@ export function Navbar() {
     setMounted(true);
   }, []);
 
-  // Jangan tampilkan navbar di halaman login & register
-  if (pathname === "/login" || pathname === "/register" || pathname === "/login/" || pathname === "/register/") return null;
+  // Jangan tampilkan navbar di halaman login, register, & forgot-password
+  if (pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/login/" || pathname === "/register/" || pathname === "/forgot-password/") return null;
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -72,18 +73,21 @@ export function Navbar() {
               </SheetTitle>
             </SheetHeader>
 
-            <nav className="flex flex-col gap-2">
+            <nav className="flex flex-col gap-2 pl-4">
               {menuItems.map((item) => {
-                const isActive = pathname === item.path;
+                const isActive = item.path === "/" 
+                  ? pathname === "/" || pathname === "" 
+                  : pathname.startsWith(item.path);
+                
                 return (
                   <Link
                     key={item.path}
                     href={item.path}
                     onClick={() => setIsOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 group
+                    className={`flex items-center gap-3 px-4 py-3 transition-all duration-300 group
                       ${isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-primary/20 hover:text-primary hover:pl-6"
+                        ? "bg-primary text-primary-foreground rounded-l-xl rounded-r-none shadow-[-4px_0_10px_rgba(var(--primary),0.2)]"
+                        : "hover:bg-primary/20 hover:text-primary hover:pl-6 rounded-l-xl rounded-r-none"
                       }`}
                   >
                     <item.icon className={`w-5 h-5 ${isActive ? "" : "text-muted-foreground group-hover:text-primary"}`} />
@@ -93,14 +97,14 @@ export function Navbar() {
               })}
             </nav>
 
-            <div className="mt-auto pt-4 border-t border-primary/10">
+            <div className="mt-auto pt-4 border-t border-primary/10 px-4 mb-6">
               <Button
                 variant="destructive"
-                className="w-full justify-start gap-3 px-4 py-6"
+                className="w-full justify-center gap-3 px-4 py-6 rounded-xl font-bold shadow-lg shadow-destructive/10 transition-transform active:scale-95"
                 onClick={handleLogout}
               >
                 <LogOut className="w-5 h-5" />
-                <span className="font-bold">Logout</span>
+                <span>Logout</span>
               </Button>
             </div>
           </SheetContent>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -27,7 +27,6 @@ export default function LoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
     try {
@@ -43,17 +42,17 @@ export default function LoginPage() {
         localStorage.setItem("token", data.token);
         router.push("/");
       } else {
-        setError(data.message || "Login gagal");
+        toast.error(data.message || "Login gagal");
       }
     } catch (err) {
-      setError("Terjadi kesalahan koneksi ke server");
+      toast.error("Terjadi kesalahan koneksi ke server");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="flex h-screen w-full items-center justify-center p-4 overflow-hidden fixed inset-0">
       <Card className="w-full max-w-sm border-primary/20 bg-card/50 backdrop-blur-sm">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">Masuk</CardTitle>
@@ -83,7 +82,11 @@ export default function LoginPage() {
                 className="bg-background/50"
               />
             </div>
-            {error && <p className="text-sm text-destructive text-center">{error}</p>}
+            <p className="text-xs text-center text-muted-foreground">
+              <Link href="/forgot-password" size="xs" className="text-primary hover:underline font-medium">
+                Lupa Password?
+              </Link>
+              </p>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
             <Button type="submit" className="w-full font-bold" disabled={loading}>

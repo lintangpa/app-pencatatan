@@ -95,10 +95,31 @@ const initDb = async () => {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 savings_goal_id INT NOT NULL,
                 amount_added DECIMAL(15,2) NOT NULL,
+                type ENUM('nabung', 'tarik') DEFAULT 'nabung',
+                note TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (savings_goal_id) REFERENCES savings_goals(id) ON DELETE CASCADE
             )
         `);
+
+        // Migration for existing tables
+        const addColumnIfNotExist = async (tableName, columnName, columnDef) => {
+            try {
+                const [columns] = await db.query(`SHOW COLUMNS FROM ${tableName} LIKE '${columnName}'`);
+                if (columns.length === 0) {
+                    await db.query(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
+                    console.log(`Added column ${columnName} to ${tableName}`);
+                }
+            } catch (err) {
+                console.error(`Error adding column ${columnName} to ${tableName}:`, err.message);
+            }
+        };
+
+        await addColumnIfNotExist('savings_histories', 'type', "ENUM('nabung', 'tarik') DEFAULT 'nabung'");
+        await addColumnIfNotExist('savings_histories', 'note', "TEXT");
+        await addColumnIfNotExist('transactions', 'is_reimbursed', "TINYINT(1) DEFAULT 0");
+
+
         console.log('Database tables initialized');
     } catch (err) {
         console.error('Error initializing database:', err.message);
@@ -344,7 +365,7 @@ app.post('/api/months/:monthId/categories', authenticate, async (req, res) => {
         if (isAddToSavings) {
             const categoryId = catResult.insertId;
             const transactionDate = new Date().toISOString().split('T')[0];
-            const note = `Alokasi awal tabungan untuk kategori: ${name}`;
+            const note = `Alokasi savings dari : ${name}`;
 
             // Create expense transaction
             await db.query(`
@@ -352,21 +373,18 @@ app.post('/api/months/:monthId/categories', authenticate, async (req, res) => {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `, [req.userId, monthId, categoryId, 'expense', budget_amount, transactionDate, note, 0]);
 
-            // Update or Create savings goal
+            // Update savings goal
             if (savings_goal_id) {
                 // If savings_goal_id is provided, use it
-                await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added) VALUES (?, ?)', [savings_goal_id, budget_amount]);
-                await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ?', [budget_amount, savings_goal_id]);
+                await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added, type, note) VALUES (?, ?, ?, ?)', [savings_goal_id, budget_amount, 'nabung', note]);
+                await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ? AND user_id = ?', [budget_amount, savings_goal_id, req.userId]);
             } else {
-                // Fallback: search by name or create new if not specified (legacy behavior)
+                // Fallback: search by name only (don't create new automatically to avoid confusion)
                 const [existingGoals] = await db.query('SELECT id FROM savings_goals WHERE user_id = ? AND name = ? LIMIT 1', [req.userId, name]);
                 if (existingGoals.length > 0) {
                     const goalId = existingGoals[0].id;
-                    await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added) VALUES (?, ?)', [goalId, budget_amount]);
+                    await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added, type, note) VALUES (?, ?, ?, ?)', [goalId, budget_amount, 'nabung', note]);
                     await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ?', [budget_amount, goalId]);
-                } else {
-                    const [sgResult] = await db.query('INSERT INTO savings_goals (user_id, name, target_amount, current_amount) VALUES (?, ?, ?, ?)', [req.userId, name, budget_amount, budget_amount]);
-                    await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added) VALUES (?, ?)', [sgResult.insertId, budget_amount]);
                 }
             }
         }
@@ -620,7 +638,7 @@ app.put('/api/savings/:id', authenticate, async (req, res) => {
 
 app.post('/api/savings/:id/add', authenticate, async (req, res) => {
     const { id } = req.params;
-    const { amount_added } = req.body;
+    const { amount_added, note } = req.body;
     try {
         // 1. Validasi kepemilikan
         const [rows] = await db.query('SELECT * FROM savings_goals WHERE id = ? AND user_id = ?', [id, req.userId]);
@@ -628,13 +646,32 @@ app.post('/api/savings/:id/add', authenticate, async (req, res) => {
             return res.status(404).json({ message: "Goal tidak ditemukan atau bukan milik Anda" });
         }
 
+        const type = amount_added >= 0 ? 'nabung' : 'tarik';
+
         // 2. Insert riwayat
-        await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added) VALUES (?, ?)', [id, amount_added]);
+        await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added, type, note) VALUES (?, ?, ?, ?)', [id, amount_added, type, note]);
 
         // 3. Update total di tabel utama (Atomic Update)
         await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ?', [amount_added, id]);
 
-        res.json({ message: "Tabungan berhasil ditambahkan" });
+        res.json({ message: amount_added >= 0 ? "Tabungan berhasil ditambahkan" : "Saldo berhasil ditarik" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/savings/:id/history', authenticate, async (req, res) => {
+    const { id } = req.params;
+    try {
+        // 1. Validasi kepemilikan
+        const [goalRows] = await db.query('SELECT * FROM savings_goals WHERE id = ? AND user_id = ?', [id, req.userId]);
+        if (goalRows.length === 0) {
+            return res.status(404).json({ message: "Goal tidak ditemukan atau bukan milik Anda" });
+        }
+
+        // 2. Ambil riwayat
+        const [rows] = await db.query('SELECT * FROM savings_histories WHERE savings_goal_id = ? ORDER BY created_at DESC', [id]);
+        res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -34,6 +34,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { AlertDialog } from "@/components/ui/alert-dialog-custom";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
@@ -54,6 +55,8 @@ export default function Home() {
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [newNote, setNewNote] = useState({ title: "", content: "" });
   const [actionLoading, setActionLoading] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [noteToDelete, setNoteToDelete] = useState(null);
 
   const getHeaders = () => ({
     "Authorization": localStorage.getItem("token"),
@@ -138,18 +141,29 @@ export default function Home() {
     }
   };
 
-  const handleDeleteNote = async (id) => {
+  const confirmDelete = (note) => {
+    setNoteToDelete(note);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteNote = async () => {
+    if (!noteToDelete) return;
+    setActionLoading(true);
     try {
-      const res = await fetch(`${API_URL}/notes/${id}`, {
+      const res = await fetch(`${API_URL}/notes/${noteToDelete.id}`, {
         method: "DELETE",
         headers: getHeaders()
       });
       if (res.ok) {
         toast.success("Catatan dihapus");
-        setNotes(notes.filter(n => n.id !== id));
+        setNotes(notes.filter(n => n.id !== noteToDelete.id));
+        setIsDeleteDialogOpen(false);
       }
     } catch (err) {
       toast.error("Gagal menghapus catatan");
+    } finally {
+      setActionLoading(false);
+      setNoteToDelete(null);
     }
   };
 
@@ -317,7 +331,7 @@ export default function Home() {
                     variant="ghost" 
                     size="icon" 
                     className="h-8 w-8 rounded-full text-destructive/40 hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => handleDeleteNote(n.id)}
+                    onClick={() => confirmDelete(n)}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -332,6 +346,15 @@ export default function Home() {
         </div>
       </section>
 
+      {/* DELETE CONFIRMATION */}
+      <AlertDialog 
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        title="Hapus Catatan?"
+        description="Aksi ini tidak dapat dibatalkan. Catatan akan dihapus secara permanen."
+        onConfirm={handleDeleteNote}
+        loading={actionLoading}
+      />
     </div>
   );
 }
