@@ -30,12 +30,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { AlertDialog } from "@/components/ui/alert-dialog-custom";
 
@@ -72,6 +72,7 @@ export default function SavingsPage() {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyNote, setHistoryNote] = useState("");
+  const [sortOrder, setSortOrder] = useState("desc"); // 'desc' (terbaru) or 'asc' (terlama)
 
   const getHeaders = () => ({
     "Authorization": localStorage.getItem("token"),
@@ -251,6 +252,7 @@ export default function SavingsPage() {
     setSelectedGoal(goal);
     setHistoryLoading(true);
     setIsHistoryModalOpen(true);
+    setSortOrder("desc"); // Reset to newest first
     try {
       const res = await fetch(`${API_URL}/savings/${goal.id}/history`, { headers: getHeaders() });
       const data = await res.json();
@@ -260,6 +262,14 @@ export default function SavingsPage() {
     } finally {
       setHistoryLoading(false);
     }
+  };
+
+  const getSortedHistory = () => {
+    return [...history].sort((a, b) => {
+      const dateA = new Date(a.created_at);
+      const dateB = new Date(b.created_at);
+      return sortOrder === "desc" ? dateB - dateA : dateA - dateB;
+    });
   };
 
   const openBalanceModal = (goal, action) => {
@@ -472,56 +482,74 @@ export default function SavingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* HISTORY SHEET (Previously Modal) */}
-      <Sheet open={isHistoryModalOpen} onOpenChange={setIsHistoryModalOpen}>
-        <SheetContent className="bg-card border-primary/20 text-card-foreground w-full sm:max-w-md flex flex-col p-0">
-          <div className="p-6 pb-0">
-            <SheetHeader>
-              <SheetTitle className="flex items-center gap-2 text-primary text-xl">
-                <TrendingUp className="w-5 h-5" />
-                Riwayat Tabungan
-              </SheetTitle>
-              <SheetDescription className="text-muted-foreground font-medium">
-                {selectedGoal?.name}
-              </SheetDescription>
-            </SheetHeader>
+      {/* HISTORY MODAL (Mobile Optimized with Sorting) */}
+      <Dialog open={isHistoryModalOpen} onOpenChange={setIsHistoryModalOpen}>
+        <DialogContent className="bg-card border-primary/20 text-card-foreground w-[95vw] max-w-md max-h-[85vh] p-0 flex flex-col overflow-hidden rounded-3xl">
+          <div className="p-6 pb-2 border-b border-primary/10">
+            <DialogHeader className="space-y-3">
+              <div className="flex items-center justify-between">
+                <DialogTitle className="flex items-center gap-2 text-primary text-xl">
+                  <TrendingUp className="w-5 h-5" />
+                  Riwayat Tabungan
+                </DialogTitle>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                <DialogDescription className="text-muted-foreground font-medium line-clamp-1">
+                  {selectedGoal?.name}
+                </DialogDescription>
+                
+                {history.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Urutkan:</span>
+                    <Select value={sortOrder} onValueChange={setSortOrder}>
+                      <SelectTrigger className="h-7 w-28 bg-muted/50 border-primary/10 text-[10px] font-bold rounded-lg focus:ring-0">
+                        <SelectValue placeholder="Pilih Urutan" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-primary/20">
+                        <SelectItem value="desc" className="text-[10px] font-medium">Terbaru</SelectItem>
+                        <SelectItem value="asc" className="text-[10px] font-medium">Terlama</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            </DialogHeader>
           </div>
           
-          <div className="flex-1 overflow-y-auto px-6 space-y-4 py-6 scrollbar-hide">
+          <div className="flex-1 overflow-y-auto px-6 space-y-4 py-4 scrollbar-hide">
             {historyLoading ? (
               <div className="py-20 flex flex-col items-center gap-3">
                 <Loader2 className="w-10 h-10 text-primary animate-spin" />
-                <p className="text-sm text-muted-foreground">Memuat perjalanan menabungmu...</p>
+                <p className="text-sm text-muted-foreground">Memuat data...</p>
               </div>
             ) : history.length > 0 ? (
-              <div className="space-y-3">
-                {history.map((h, idx) => (
+              <div className="space-y-3 pb-4">
+                {getSortedHistory().map((h, idx) => (
                   <div 
                     key={h.id} 
-                    className="bg-muted/30 border border-primary/5 rounded-2xl p-4 flex justify-between items-center group hover:bg-muted/50 transition-all hover:scale-[1.02] duration-200"
-                    style={{ animationDelay: `${idx * 50}ms` }}
+                    className="bg-muted/30 border border-primary/5 rounded-2xl p-4 flex justify-between items-center group transition-all"
                   >
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${h.type === 'nabung' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                    <div className="space-y-1.5 flex-1 mr-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${h.type === 'nabung' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
                           {h.type === 'nabung' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                         </div>
-                        <div>
-                          <p className="text-sm font-bold leading-none">{h.type === 'nabung' ? 'Nabung' : 'Tarik Saldo'}</p>
-                          <p className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-wider">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold truncate">{h.type === 'nabung' ? 'Nabung' : 'Tarik Saldo'}</p>
+                          <p className="text-[10px] text-muted-foreground font-medium mt-0.5 truncate uppercase tracking-tighter">
                             {new Date(h.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} • {new Date(h.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
                       </div>
                       {h.note && (
-                        <div className="pl-10">
-                          <p className="text-xs text-muted-foreground italic bg-muted/50 px-2 py-1 rounded-md border border-primary/5">
+                        <div className="pl-11">
+                          <p className="text-xs text-muted-foreground italic line-clamp-2">
                             "{h.note}"
                           </p>
                         </div>
                       )}
                     </div>
-                    <p className={`font-bold text-lg ${h.type === 'nabung' ? 'text-green-500' : 'text-red-500'}`}>
+                    <p className={`font-bold text-base shrink-0 ${h.type === 'nabung' ? 'text-green-500' : 'text-red-500'}`}>
                       {h.type === 'nabung' ? '+' : ''}{formatIDR(h.amount_added)}
                     </p>
                   </div>
@@ -532,21 +560,18 @@ export default function SavingsPage() {
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto opacity-20">
                   <PiggyBank className="w-8 h-8" />
                 </div>
-                <div className="space-y-1">
-                  <p className="font-bold text-muted-foreground">Belum ada transaksi</p>
-                  <p className="text-xs text-muted-foreground/60 px-10">Mulailah menabung untuk melihat riwayat transaksimu di sini.</p>
-                </div>
+                <p className="font-bold text-muted-foreground text-sm">Belum ada transaksi</p>
               </div>
             )}
           </div>
           
-          <div className="p-6 pt-2 border-t border-primary/10">
-            <Button variant="outline" className="w-full h-12 rounded-xl border-primary/20 font-bold hover:bg-primary/5 transition-colors" onClick={() => setIsHistoryModalOpen(false)}>
-              Tutup Riwayat
+          <div className="p-6 pt-3 border-t border-primary/10 bg-card">
+            <Button variant="outline" className="w-full h-11 rounded-xl border-primary/20 font-bold" onClick={() => setIsHistoryModalOpen(false)}>
+              Tutup
             </Button>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {/* DELETE CONFIRMATION */}
       <AlertDialog 
