@@ -8,6 +8,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
@@ -15,6 +23,7 @@ export default function RegisterPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -24,8 +33,13 @@ export default function RegisterPage() {
     };
   }, []);
 
-  const handleRegister = async (e) => {
+  const handleOpenConfirm = (e) => {
     e.preventDefault();
+    setIsConfirmOpen(true);
+  };
+
+  const handleRegister = async () => {
+    setIsConfirmOpen(false);
     setLoading(true);
 
     try {
@@ -58,12 +72,15 @@ export default function RegisterPage() {
     <div className="flex h-screen w-full items-center justify-center p-4 overflow-hidden fixed inset-0">
       <Card className="w-full max-w-sm border-primary/20 bg-card/50 backdrop-blur-sm">
         <CardHeader className="space-y-1">
+          <div className="flex justify-center mb-2">
+            <img src="/hk.png" alt="Logo" className="w-12 h-12 rounded-lg object-cover" />
+          </div>
           <CardTitle className="text-2xl font-bold text-center">Daftar Akun</CardTitle>
           <CardDescription className="text-center">
             Buat akun baru untuk mulai mencatat keuangan
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleRegister}>
+        <form onSubmit={handleOpenConfirm}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
@@ -102,6 +119,25 @@ export default function RegisterPage() {
           </CardFooter>
         </form>
       </Card>
+
+      <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Konfirmasi Pendaftaran</DialogTitle>
+            <DialogDescription>
+              Apakah Anda yakin ingin mendaftar? Harap dicatat bahwa username Anda bersifat rahasia.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsConfirmOpen(false)}>
+              Batal
+            </Button>
+            <Button onClick={handleRegister}>
+              Ya, Daftar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

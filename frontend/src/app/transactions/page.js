@@ -20,9 +20,11 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  LayoutGrid
+  LayoutGrid,
+  FileText
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { exportPdf } from "@/lib/exportPdf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,6 +78,7 @@ export default function TransactionsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
   // Form states
@@ -300,6 +303,48 @@ export default function TransactionsPage() {
     }
   };
 
+  const handleBulkUnreimburse = async () => {
+    const [year, month] = selectedMonth.split("-");
+    const monthObj = months.find(m => m.year === parseInt(year) && m.month === parseInt(month));
+    
+    if (!monthObj) return;
+
+    setActionLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/transactions/clear-reimburse/${monthObj.id}`, { 
+        method: "PUT", 
+        headers: getHeaders() 
+      });
+      if (res.ok) {
+        toast.success("Semua status reimburse berhasil diselesaikan");
+        fetchTransactions();
+        setIsBulkDialogOpen(false);
+      } else {
+        toast.error("Gagal memperbarui data");
+      }
+    } catch (err) {
+      toast.error("Kesalahan koneksi");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleExportPdf = () => {
+    const [year, month] = selectedMonth.split("-");
+    const monthNames = [
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+    const monthName = monthNames[parseInt(month) - 1];
+    
+    const transactionsWithNames = transactions.map(t => ({
+      ...t,
+      category_name: getCategoryName(t.category_budget_id)
+    }));
+    
+    exportPdf(transactionsWithNames, monthName, year, "User");
+  };
+
   // Processing Logic
   const allFilteredTransactions = transactions
     .filter(t => {
@@ -385,6 +430,14 @@ export default function TransactionsPage() {
                 className="pl-9 bg-card border-primary/20 h-10 w-40 text-base font-medium"
              />
            </div>
+
+           <Button size="sm" variant="outline" className="rounded-full px-4 h-9 font-semibold border-primary/20 hover:bg-primary/10 text-primary" onClick={handleExportPdf}>
+             <FileText className="w-4 h-4 mr-1" /> PDF
+           </Button>
+
+           <Button size="sm" variant="outline" className="rounded-full px-4 h-9 font-semibold border-primary/20 hover:bg-primary/10 text-primary" onClick={() => setIsBulkDialogOpen(true)}>
+             <CheckCircle2 className="w-4 h-4 mr-1" /> Lunasi
+           </Button>
 
            <Dialog open={isFormOpen} onOpenChange={(val) => { setIsFormOpen(val); if(!val) resetForm(); }}>
               <DialogTrigger asChild>
@@ -752,6 +805,16 @@ export default function TransactionsPage() {
         title="Hapus Transaksi?"
         description="Aksi ini tidak dapat dibatalkan. Transaksi akan dihapus secara permanen dari riwayat Anda."
         onConfirm={handleDelete}
+        loading={actionLoading}
+      />
+
+      {/* BULK UNREIMBURSE CONFIRMATION */}
+      <AlertDialog 
+        open={isBulkDialogOpen}
+        onOpenChange={setIsBulkDialogOpen}
+        title="Selesaikan Semua Reimburse?"
+        description="Apakah Anda yakin semua dana reimburse bulan ini sudah dikembalikan? Status reimburse akan dihilangkan dari semua transaksi terkait."
+        onConfirm={handleBulkUnreimburse}
         loading={actionLoading}
       />
     </div>

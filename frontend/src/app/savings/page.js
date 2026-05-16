@@ -74,6 +74,15 @@ export default function SavingsPage() {
   const [historyNote, setHistoryNote] = useState("");
   const [sortOrder, setSortOrder] = useState("desc"); // 'desc' (terbaru) or 'asc' (terlama)
 
+  const [isEditHistoryModalOpen, setIsEditHistoryModalOpen] = useState(false);
+  const [editingHistory, setEditingHistory] = useState(null);
+  const [historyAmountInput, setHistoryAmountInput] = useState("");
+  const [displayHistoryAmountInput, setDisplayHistoryAmountInput] = useState("");
+  const [historyEditNote, setHistoryEditNote] = useState("");
+  
+  const [isDeleteHistoryOpen, setIsDeleteHistoryOpen] = useState(false);
+  const [historyToDelete, setHistoryToDelete] = useState(null);
+
   const getHeaders = () => ({
     "Authorization": localStorage.getItem("token"),
     "Content-Type": "application/json",
@@ -281,6 +290,74 @@ export default function SavingsPage() {
   const confirmDelete = (goal) => {
     setGoalToDelete(goal);
     setIsDeleteDialogOpen(true);
+  };
+
+  const openEditHistory = (h) => {
+    setEditingHistory(h);
+    setHistoryAmountInput(Math.abs(h.amount_added).toString());
+    setDisplayHistoryAmountInput(toRupiah(Math.abs(h.amount_added).toString()));
+    setHistoryEditNote(h.note || "");
+    setIsEditHistoryModalOpen(true);
+  };
+
+  const handleUpdateHistory = async (e) => {
+    e.preventDefault();
+    if (!historyAmountInput) return toast.error("Masukkan nominal");
+
+    const finalAmount = editingHistory.type === "nabung" ? parseFloat(historyAmountInput) : -parseFloat(historyAmountInput);
+
+    setActionLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/savings-history/${editingHistory.id}`, {
+        method: "PUT",
+        headers: getHeaders(),
+        body: JSON.stringify({ 
+          amount_added: finalAmount,
+          note: historyEditNote
+        })
+      });
+      if (res.ok) {
+        toast.success("Riwayat tabungan diperbarui");
+        fetchSavings(); // Refresh progress
+        fetchHistory(selectedGoal); // Refresh history
+        setIsEditHistoryModalOpen(false);
+      } else {
+        toast.error("Gagal memperbarui riwayat");
+      }
+    } catch (err) {
+      toast.error("Kesalahan koneksi");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const confirmDeleteHistory = (h) => {
+    setHistoryToDelete(h);
+    setIsDeleteHistoryOpen(true);
+  };
+
+  const handleDeleteHistory = async () => {
+    if (!historyToDelete) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/savings-history/${historyToDelete.id}`, {
+        method: "DELETE",
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        toast.success("Riwayat tabungan dihapus");
+        fetchSavings(); // Refresh progress
+        fetchHistory(selectedGoal); // Refresh history
+        setIsDeleteHistoryOpen(false);
+      } else {
+        toast.error("Gagal menghapus riwayat");
+      }
+    } catch (err) {
+      toast.error("Kesalahan koneksi");
+    } finally {
+      setActionLoading(false);
+      setHistoryToDelete(null);
+    }
   };
 
   return (
@@ -549,9 +626,19 @@ export default function SavingsPage() {
                         </div>
                       )}
                     </div>
-                    <p className={`font-bold text-base shrink-0 ${h.type === 'nabung' ? 'text-green-500' : 'text-red-500'}`}>
-                      {h.type === 'nabung' ? '+' : ''}{formatIDR(h.amount_added)}
-                    </p>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <p className={`font-bold text-base ${h.type === 'nabung' ? 'text-green-500' : 'text-red-500'}`}>
+                        {h.type === 'nabung' ? '+' : ''}{formatIDR(h.amount_added)}
+                      </p>
+                      <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full text-primary/70 hover:text-primary hover:bg-primary/10" onClick={() => openEditHistory(h)}>
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full text-destructive/50 hover:text-destructive hover:bg-destructive/10" onClick={() => confirmDeleteHistory(h)}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -580,6 +667,54 @@ export default function SavingsPage() {
         title="Hapus Target Tabungan?"
         description={`Apakah Anda yakin ingin menghapus target "${goalToDelete?.name}"? Aksi ini akan menghapus semua riwayat tabungan untuk target ini.`}
         onConfirm={handleDeleteGoal}
+        loading={actionLoading}
+      />
+
+      {/* EDIT HISTORY MODAL */}
+      <Dialog open={isEditHistoryModalOpen} onOpenChange={setIsEditHistoryModalOpen}>
+        <DialogContent className="bg-card border-primary/20 text-card-foreground">
+          <DialogHeader>
+            <DialogTitle>Edit Riwayat Tabungan</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateHistory} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-muted-foreground">Nominal</Label>
+              <Input 
+                type="text"
+                inputMode="numeric"
+                placeholder="Rp0"
+                value={displayHistoryAmountInput}
+                onChange={(e) => handleAmountChange(e, setHistoryAmountInput, setDisplayHistoryAmountInput)}
+                required
+                className="bg-muted/50 border-primary/10 h-11 text-lg font-bold text-primary"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-muted-foreground">Catatan (Opsional)</Label>
+              <Input 
+                placeholder="Catatan"
+                value={historyEditNote}
+                onChange={(e) => setHistoryEditNote(e.target.value)}
+                className="bg-muted/50 border-primary/10 h-11"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" className="w-full h-11 font-bold" disabled={actionLoading}>
+                {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Simpan Perubahan
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* DELETE HISTORY CONFIRMATION */}
+      <AlertDialog 
+        open={isDeleteHistoryOpen}
+        onOpenChange={setIsDeleteHistoryOpen}
+        title="Hapus Riwayat Tabungan?"
+        description={`Apakah Anda yakin ingin menghapus riwayat ini? Saldo tabungan akan disesuaikan.`}
+        onConfirm={handleDeleteHistory}
         loading={actionLoading}
       />
     </div>

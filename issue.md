@@ -1,48 +1,88 @@
-# Issue & Implementation Plan: Refactor Riwayat Tabungan & Fitur Sorting
+# Plan Implementasi: Perbaikan Tampilan Export PDF
 
-Dokumen ini berisi perencanaan untuk mengubah tampilan riwayat tabungan (savings history) agar lebih optimal di perangkat mobile dan menambahkan fitur pengurutan data (sorting).
+## Objektif
+Memperbaiki tampilan export PDF agar lebih profesional dengan tema menyerupai shadcn (dominan hijau), mengubah judul laporan menjadi "E-Statement", dan menyempurnakan tata letak halaman (memisahkan tabel kategori ke halaman baru dan mengatur header tabel panjang).
 
-## 1. UI Riwayat Tabungan (Mobile-Friendly Modal)
+## Rincian Kebutuhan & Solusi
 
-**Deskripsi Masalah:**
-Tampilan riwayat tabungan saat ini perlu dioptimalkan agar lebih nyaman dilihat di layar kecil (mobile) namun tetap menggunakan komponen Modal (Dialog).
+### 1. Perubahan Judul dan Tema Warna (Dominan Hijau Shadcn)
+- **File Target:** `frontend/src/lib/exportPdf.js`
+- **Teks Judul:** Ganti tulisan `'Laporan Transaksi Keuangan'` menjadi `'E-Statement'`.
+- **Warna & Tema (Shadcn-like):** 
+  - Ubah warna header tabel (`headStyles.fillColor`) dari biru/gelap menjadi hijau ala shadcn (misal hijau zamrud/emerald `[22, 163, 74]` atau `#16a34a`).
+  - Gunakan `theme: 'grid'` (atau tetap `striped` dengan warna belang sangat terang seperti zinc-50) agar tabel terlihat rapi, kotak-kotak terstruktur, dan modern.
+  - Ubah warna background pada baris *footer* ("Total") menjadi warna abu-abu terang (misal `[244, 244, 245]` atau `#f4f4f5` khas zinc-100 shadcn) agar elegan.
 
-**Tahapan Implementasi:**
-*   **Frontend (React/Next.js):**
-    1.  **Refactor Modal:** Gunakan komponen `Dialog` dari Shadcn UI. Tambahkan kelas responsif agar pada mobile, modal mengambil area yang cukup luas (misal: `w-[95vw]` atau `max-w-md`).
-    2.  **Sticky Header:** Pastikan bagian judul Modal dan kontrol sorting (filter) bersifat *sticky* (tetap di atas) sehingga pengguna tidak kehilangan konteks saat melakukan scroll pada riwayat yang panjang.
-    3.  **Optimasi Item Riwayat:**
-        *   Gunakan font size yang pas (`text-sm` untuk detail, `text-xs` untuk tanggal).
-        *   Pastikan area klik/sentuh tidak terlalu rapat.
-        *   Gunakan warna yang jelas untuk membedakan uang masuk (nabung) dan uang keluar (tarik).
-    4.  **Scroll Area:** Pastikan kontainer riwayat memiliki `max-h` yang dinamis (misal `max-h-[60vh]`) dengan `overflow-y-auto` agar tidak merusak layout modal.
+### 2. Memindahkan Ringkasan Kategori ke Halaman Baru
+- **Kondisi Saat Ini:** Tabel kategori diletakkan tepat di bawah tabel transaksi (menggunakan koordinat `doc.lastAutoTable.finalY`).
+- **Kebutuhan:** Ringkasan kategori wajib berada di halaman baru (halaman terpisah) meskipun tabel transaksi utama masih menyisakan ruang kosong.
+- **Solusi:**
+  - Panggil fungsi `doc.addPage();` sebelum mencetak judul ringkasan kategori.
+  - Hapus variabel `finalY` dan atur ulang koordinat `Y` (misalnya `20`) agar posisi judul dan tabel kategori merapat ke bagian atas di halaman baru.
 
-## 2. Fitur Sorting (Terbaru & Terlama)
-
-**Deskripsi Masalah:**
-Pengguna membutuhkan kemampuan untuk melihat riwayat dari yang paling baru atau dari yang paling awal (terlama).
-
-**Tahapan Implementasi:**
-*   **Frontend (React/Next.js):**
-    1.  **State Management:** Tambahkan state baru, misalnya `sortOrder` dengan nilai default `'desc'` (terbaru).
-    2.  **Komponen UI Sorting:** 
-        *   Tambahkan komponen `Select` atau toggle button di dalam header modal riwayat.
-        *   Opsi: "Terbaru" (Sort by Date Descending) dan "Terlama" (Sort by Date Ascending).
-    3.  **Logika Sorting:**
-        *   Lakukan sorting di sisi client (frontend) terhadap array `history` sebelum di-render.
-        *   Contoh logika:
-          ```javascript
-          const sortedHistory = [...history].sort((a, b) => {
-            const dateA = new Date(a.created_at);
-            const dateB = new Date(b.created_at);
-            return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
-          });
-          ```
-    4.  **Feedback Visual:** Pastikan ada indikator (misal ikon panah atas/bawah) yang menunjukkan urutan sorting yang sedang aktif.
+### 3. Konfigurasi Header Tabel (Menghilangkan Pengulangan Header)
+- **Kondisi Saat Ini:** Jika tabel transaksi terlalu panjang dan terpotong ke halaman berikutnya, header tabel ("Tanggal", "Deskripsi", dll) akan tercetak ulang di halaman baru.
+- **Kebutuhan:** Jika tabel kepanjangan, header tabel tidak perlu diulang lagi di halaman baru tersebut.
+- **Solusi:** Tambahkan properti `showHead: 'firstPage'` pada opsi konfigurasi `autoTable`.
 
 ---
 
-### Catatan untuk Developer:
-- Pastikan komponen Shadcn UI yang diperlukan (`Select`, `Dialog`, `Button`) sudah terpasang.
-- Uji coba tampilan menggunakan mode "Inspect" di browser dengan berbagai resolusi layar HP.
-- Jaga agar kode tetap bersih dan berikan komentar pada bagian logika sorting.
+## Langkah-langkah Implementasi Rinci (Step-by-Step Code)
+
+Instruksi teknis untuk modifikasi pada `frontend/src/lib/exportPdf.js`:
+
+### Step 1: Ubah Judul Dokumen
+Cari baris yang mencetak judul utama:
+```javascript
+doc.text('Laporan Transaksi Keuangan', 14, 22);
+```
+Ubah menjadi:
+```javascript
+doc.text('E-Statement', 14, 22);
+```
+
+### Step 2: Modifikasi `autoTable` Pertama (Tabel Transaksi Utama)
+Tambahkan `showHead: 'firstPage'` dan ubah konfigurasi warna menjadi hijau:
+```javascript
+autoTable(doc, {
+  startY: 42,
+  head: [['Tanggal', 'Deskripsi', 'Kategori', 'Debit (Keluar)', 'Credit (Masuk)']],
+  body: tableData,
+  foot: [[
+    // ... data total ...
+  ]],
+  theme: 'grid', // atau 'striped' - gunakan grid untuk kesan lebih rapi ala ui table
+  headStyles: { fillColor: [22, 163, 74], textColor: 255 }, // Warna dominan Hijau (shadcn green-600)
+  footStyles: { fillColor: [244, 244, 245], textColor: 0, fontStyle: 'bold' }, // Abu-abu muda untuk footer
+  showHead: 'firstPage' // Mencegah header berulang di halaman selanjutnya
+});
+```
+
+### Step 3: Memindahkan Tabel Kategori ke Halaman Baru
+Ubah logika bagian `// Category Summary` (sekitar baris 75 ke bawah).
+
+Hapus pengambilan posisi akhir tabel sebelumnya:
+```javascript
+// HAPUS BARIS INI:
+// const finalY = doc.lastAutoTable.finalY || 42;
+```
+
+Ganti bagian pencetakan tabel ringkasan kategori dengan kode berikut:
+```javascript
+// Tambahkan halaman baru secara paksa
+doc.addPage();
+
+doc.setFontSize(14);
+// Set posisi Y fix di bagian atas halaman (misal 20)
+doc.text('Ringkasan Pengeluaran per Kategori', 14, 20);
+
+// Gunakan autoTable untuk tabel kategori di halaman baru
+autoTable(doc, {
+  startY: 25, // Mulai tabel sedikit di bawah judul
+  head: [['Nama Kategori', 'Total Pengeluaran']],
+  body: catData,
+  theme: 'grid',
+  headStyles: { fillColor: [22, 163, 74], textColor: 255 }, // Samakan dengan warna hijau tabel transaksi
+  columnStyles: { 1: { halign: 'right' } }
+});
+```

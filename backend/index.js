@@ -118,6 +118,7 @@ const initDb = async () => {
         await addColumnIfNotExist('savings_histories', 'type', "ENUM('nabung', 'tarik') DEFAULT 'nabung'");
         await addColumnIfNotExist('savings_histories', 'note', "TEXT");
         await addColumnIfNotExist('transactions', 'is_reimbursed', "TINYINT(1) DEFAULT 0");
+        await addColumnIfNotExist('savings_histories', 'transaction_id', "INT NULL");
 
 
         console.log('Database tables initialized');
@@ -368,22 +369,23 @@ app.post('/api/months/:monthId/categories', authenticate, async (req, res) => {
             const note = `Alokasi savings dari : ${name}`;
 
             // Create expense transaction
-            await db.query(`
+            const [transResult] = await db.query(`
                 INSERT INTO transactions (user_id, month_budget_id, category_budget_id, type, amount, transaction_date, note, is_reimbursed)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `, [req.userId, monthId, categoryId, 'expense', budget_amount, transactionDate, note, 0]);
+            const transId = transResult.insertId;
 
             // Update savings goal
             if (savings_goal_id) {
                 // If savings_goal_id is provided, use it
-                await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added, type, note) VALUES (?, ?, ?, ?)', [savings_goal_id, budget_amount, 'nabung', note]);
+                await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added, type, note, transaction_id) VALUES (?, ?, ?, ?, ?)', [savings_goal_id, budget_amount, 'nabung', note, transId]);
                 await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ? AND user_id = ?', [budget_amount, savings_goal_id, req.userId]);
             } else {
                 // Fallback: search by name only (don't create new automatically to avoid confusion)
                 const [existingGoals] = await db.query('SELECT id FROM savings_goals WHERE user_id = ? AND name = ? LIMIT 1', [req.userId, name]);
                 if (existingGoals.length > 0) {
                     const goalId = existingGoals[0].id;
-                    await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added, type, note) VALUES (?, ?, ?, ?)', [goalId, budget_amount, 'nabung', note]);
+                    await db.query('INSERT INTO savings_histories (savings_goal_id, amount_added, type, note, transaction_id) VALUES (?, ?, ?, ?, ?)', [goalId, budget_amount, 'nabung', note, transId]);
                     await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ?', [budget_amount, goalId]);
                 }
             }
@@ -488,6 +490,21 @@ app.post('/api/transactions', authenticate, async (req, res) => {
     }
 });
 
+app.put('/api/transactions/clear-reimburse/:monthId', authenticate, async (req, res) => {
+    const { monthId } = req.params;
+    try {
+        const [result] = await db.query(`
+            UPDATE transactions 
+            SET is_reimbursed = 0 
+            WHERE user_id = ? AND month_budget_id = ? AND is_reimbursed = 1
+        `, [req.userId, monthId]);
+
+        res.json({ message: "Semua status reimburse bulan ini berhasil diselesaikan" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.put('/api/transactions/:id', authenticate, async (req, res) => {
     const { id } = req.params;
     const { month_budget_id, category_budget_id, type, amount, transaction_date, note, is_reimbursed } = req.body;
@@ -497,15 +514,34 @@ app.put('/api/transactions/:id', authenticate, async (req, res) => {
     }
 
     try {
+        // Find existing transaction to calculate difference for savings if needed
+        const [oldTransRows] = await db.query('SELECT * FROM transactions WHERE id = ? AND user_id = ?', [id, req.userId]);
+        if (oldTransRows.length === 0) {
+            return res.status(404).json({ message: "Transaksi tidak ditemukan atau bukan milik Anda" });
+        }
+        const oldTrans = oldTransRows[0];
+
         const [result] = await db.query(`
             UPDATE transactions 
             SET month_budget_id = ?, category_budget_id = ?, type = ?, amount = ?, transaction_date = ?, note = ?, is_reimbursed = ?
             WHERE id = ? AND user_id = ?
         `, [month_budget_id, category_budget_id, type, amount, transaction_date, note, is_reimbursed ? 1 : 0, id, req.userId]);
 
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "Transaksi tidak ditemukan atau bukan milik Anda" });
+        // Sync with savings if this transaction is linked
+        const [historyRows] = await db.query('SELECT * FROM savings_histories WHERE transaction_id = ?', [id]);
+        if (historyRows.length > 0) {
+            const history = historyRows[0];
+            const oldAmount = parseFloat(oldTrans.amount);
+            const newAmount = parseFloat(amount);
+            const selisih = newAmount - oldAmount;
+
+            // Update savings history
+            await db.query('UPDATE savings_histories SET amount_added = ?, note = ? WHERE transaction_id = ?', [newAmount, note, id]);
+
+            // Update savings goal
+            await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ?', [selisih, history.savings_goal_id]);
         }
+
         res.json({ message: "Transaksi berhasil diperbarui" });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -515,10 +551,25 @@ app.put('/api/transactions/:id', authenticate, async (req, res) => {
 app.delete('/api/transactions/:id', authenticate, async (req, res) => {
     const { id } = req.params;
     try {
+        // Check if there is a linked savings history
+        const [historyRows] = await db.query('SELECT * FROM savings_histories WHERE transaction_id = ?', [id]);
+        
         const [result] = await db.query('DELETE FROM transactions WHERE id = ? AND user_id = ?', [id, req.userId]);
         if (result.affectedRows === 0) {
             return res.status(404).json({ message: "Transaksi tidak ditemukan atau bukan milik Anda" });
         }
+
+        if (historyRows.length > 0) {
+            const history = historyRows[0];
+            const amount = parseFloat(history.amount_added);
+
+            // Delete savings history
+            await db.query('DELETE FROM savings_histories WHERE transaction_id = ?', [id]);
+
+            // Update savings goal
+            await db.query('UPDATE savings_goals SET current_amount = current_amount - ? WHERE id = ?', [amount, history.savings_goal_id]);
+        }
+
         res.json({ message: "Transaksi berhasil dihapus" });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -698,6 +749,69 @@ app.delete('/api/savings/:id', authenticate, async (req, res) => {
             return res.status(404).json({ message: "Goal tidak ditemukan atau bukan milik Anda" });
         }
         res.json({ message: "Goal berhasil dihapus" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Savings Histories Routes
+app.put('/api/savings-history/:id', authenticate, async (req, res) => {
+    const { id } = req.params;
+    const { amount_added, note, type } = req.body;
+    try {
+        const [rows] = await db.query('SELECT * FROM savings_histories WHERE id = ?', [id]);
+        if (rows.length === 0) {
+            return res.status(404).json({ message: "Riwayat tidak ditemukan" });
+        }
+        const oldHistory = rows[0];
+
+        const [goalRows] = await db.query('SELECT * FROM savings_goals WHERE id = ? AND user_id = ?', [oldHistory.savings_goal_id, req.userId]);
+        if (goalRows.length === 0) {
+            return res.status(403).json({ message: "Anda tidak berhak mengakses riwayat ini" });
+        }
+
+        const oldAmount = parseFloat(oldHistory.amount_added);
+        const newAmount = parseFloat(amount_added);
+        const selisih = newAmount - oldAmount;
+
+        await db.query('UPDATE savings_histories SET amount_added = ?, note = ?, type = ? WHERE id = ?', [newAmount, note, type || oldHistory.type, id]);
+
+        await db.query('UPDATE savings_goals SET current_amount = current_amount + ? WHERE id = ?', [selisih, oldHistory.savings_goal_id]);
+
+        if (oldHistory.transaction_id) {
+            await db.query('UPDATE transactions SET amount = ?, note = ? WHERE id = ? AND user_id = ?', [newAmount, note, oldHistory.transaction_id, req.userId]);
+        }
+
+        res.json({ message: "Riwayat tabungan berhasil diperbarui" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/savings-history/:id', authenticate, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [rows] = await db.query('SELECT * FROM savings_histories WHERE id = ?', [id]);
+        if (rows.length === 0) {
+            return res.status(404).json({ message: "Riwayat tidak ditemukan" });
+        }
+        const history = rows[0];
+
+        const [goalRows] = await db.query('SELECT * FROM savings_goals WHERE id = ? AND user_id = ?', [history.savings_goal_id, req.userId]);
+        if (goalRows.length === 0) {
+            return res.status(403).json({ message: "Anda tidak berhak mengakses riwayat ini" });
+        }
+
+        await db.query('DELETE FROM savings_histories WHERE id = ?', [id]);
+
+        const amount = parseFloat(history.amount_added);
+        await db.query('UPDATE savings_goals SET current_amount = current_amount - ? WHERE id = ?', [amount, history.savings_goal_id]);
+
+        if (history.transaction_id) {
+            await db.query('DELETE FROM transactions WHERE id = ? AND user_id = ?', [history.transaction_id, req.userId]);
+        }
+
+        res.json({ message: "Riwayat tabungan berhasil dihapus" });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

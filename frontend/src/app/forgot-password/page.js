@@ -8,12 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 export default function ForgotPasswordPage() {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showUsername, setShowUsername] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -57,6 +59,9 @@ export default function ForgotPasswordPage() {
     <div className="flex h-screen w-full items-center justify-center p-4 overflow-hidden fixed inset-0">
       <Card className="w-full max-w-sm border-primary/20 bg-card/50 backdrop-blur-sm">
         <CardHeader className="space-y-1">
+          <div className="flex justify-center mb-2">
+            <img src="/hk.png" alt="Logo" className="w-12 h-12 rounded-lg object-cover" />
+          </div>
           <CardTitle className="text-2xl font-bold text-center">Lupa Password</CardTitle>
           <CardDescription className="text-center">
             Masukkan username Anda untuk mereset password.
@@ -66,14 +71,24 @@ export default function ForgotPasswordPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                placeholder="Masukkan username Anda"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                className="bg-background/50"
-              />
+              <div className="relative">
+                <Input
+                  id="username"
+                  type={showUsername ? "text" : "password"}
+                  placeholder="Masukkan username Anda"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  className="bg-background/50 pr-10 [&::-ms-reveal]:hidden"
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowUsername(!showUsername)}
+                >
+                  {showUsername ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">

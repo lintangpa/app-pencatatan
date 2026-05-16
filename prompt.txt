@@ -1,0 +1,9 @@
+buatkan issue.md yang berisi perencanaan untuk nanti dimplementasikan oleh junior dev atau model ai murah
+
+isi planningnya itu :
+
+1. Fixing tampilan pdf, warna menggunakan dominan warna hijau, tampilan dengan tema tema seperti shadcn, laporan transaksi keunagan diganti dengan E-Statement
+2. Untuk rincian perkategori buat di halaman baru jika di halaman transaksi masih ada yang kosong buat di halaman baru saja.
+3. kalo memang terlalu panjang bagian header tabel tidak perlu ada lagi di halaman baru itu
+    
+jelaskan tahapan implementasinya secara rinci ya
